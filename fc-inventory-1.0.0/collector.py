@@ -873,7 +873,7 @@ class InventoryCollector:
             row["Site"] = _try_paths(hba, ["site"])
             row["Device"] = _try_paths(hba, ["name"])
             row["Type"] = _try_paths(hba, ["type"])
-            row["WWN"] = _try_paths(hba, ["wwn"])
+            row["WWPN"] = _try_paths(hba, ["wwn"])
             row["Status"] = _try_paths(hba, ["status"])
             rows.append(row)
         return rows
