@@ -7,7 +7,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-
 # Header style constants
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
 HEADER_FILL = PatternFill(fgColor="2C3E50", fill_type="solid")
@@ -17,7 +16,7 @@ HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center")
 # 陈俊杰
 SHEET_ORDER = [
     "vSummary", "vInfo", "vCPU", "vMemory", "vDisk", "vNetwork",
-    "vHost", "vCluster", "vDatastore", "vSwitch", "vSnapshot",
+    "vHost", "vCluster", "vDatastore", "vSwitch", "vSnapshot", "vHBA"
 ]
 
 
@@ -96,4 +95,3 @@ def _auto_size_columns(ws, row_count):
         adjusted = min(max_length + 3, 50)
         adjusted = max(adjusted, 10)
         ws.column_dimensions[get_column_letter(col_idx)].width = adjusted
-

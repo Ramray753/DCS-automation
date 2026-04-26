@@ -164,9 +164,9 @@ class FCClient:
             try:
                 data = resp.json()
                 self.token = (
-                    data.get("accessSession")
-                    or data.get("token")
-                    or data.get("X-Auth-Token")
+                        data.get("accessSession")
+                        or data.get("token")
+                        or data.get("X-Auth-Token")
                 )
             except Exception:
                 pass
@@ -369,5 +369,18 @@ class FCClient:
             return result
         except Exception as e:
             logger.warning(f"Site-level portgroup query failed: {e}")
+            return []
+
+    def get_storage_adapters(self, site_uri, host_uri):
+        """Get all storage adapters in a host """
+        try:
+            data = self._get(f"{host_uri}/storageadapters")
+            result = data.get("storageAdapters", [])
+            if not result and isinstance(data, list):
+                result = data
+            logger.info(f"Found {len(result)} storageAdapters at host level")
+            return result
+        except Exception as e:
+            logger.warning(f"Host-level storageAdapters query failed: {e}")
             return []
 

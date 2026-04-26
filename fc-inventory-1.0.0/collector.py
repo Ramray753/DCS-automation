@@ -265,6 +265,8 @@ class InventoryCollector:
         self.cluster_map = {}
         self.datastore_map = {}
 
+        self.hbas = []
+
     def cancel(self):
         self.cancelled = True
 
@@ -283,7 +285,8 @@ class InventoryCollector:
         if not obj:
             logger.info(f"=== SAMPLE {label}: empty ===")
             return
-        logger.info(f"=== SAMPLE {label} top-level keys: {list(obj.keys()) if isinstance(obj, dict) else type(obj)} ===")
+        logger.info(
+            f"=== SAMPLE {label} top-level keys: {list(obj.keys()) if isinstance(obj, dict) else type(obj)} ===")
         flat = _flatten_dict(obj)
         for k, v in list(flat.items())[:80]:
             logger.info(f"  {k} = {repr(v)[:100]}")
@@ -392,7 +395,7 @@ class InventoryCollector:
                     vm_uri = vm.get("uri", "")
                     vm_name = vm.get("name", vm_uri)
                     vm_urn = vm.get("urn", "")
-                    pct = 50 + int((i / max(total_vms, 1)) * 40)
+                    pct = 50 + int((i / max(total_vms, 1)) * 30)
                     self._update_progress(pct, f"Fetching VM detail ({i + 1}/{total_vms}): {vm_name}...")
 
                     try:
@@ -423,12 +426,29 @@ class InventoryCollector:
                     except Exception as e:
                         logger.warning(f"Failed to get VM detail {vm_name}: {e}")
 
-            # Step 9: Build lookup maps and flatten data
+                # Step 9: storageAdapters 2026-4-25
+                for i, host in enumerate(hosts):
+                    host_uri = host.get("uri", "")
+                    host_name = host.get("name", host_uri)
+                    pct = 80 + int((i / max(len(hosts), 1)) * 10)
+                    self._update_progress(pct, f"Fetching storageAdapters ({i + 1}/{len(hosts)}): {host_name}...")
+                    try:
+                        hbas = self.client.get_storage_adapters(site_uri=site_uri, host_uri=host_uri)
+                        for hba in hbas:
+                            hba['host'] = host_name
+                            hba['site'] = site['name']
+                        self.hbas.extend(hbas)
+                        if i == 0:
+                            self._log_sample("storageAdapters", hbas[0])
+                    except Exception as e:
+                        logger.warning(f"Failed to get storageAdapters {host_name}: {e}")
+
+            # Step 10: Build lookup maps and flatten data
             self._update_progress(92, "Processing collected data...")
             self._build_lookup_maps()
             result = self._build_all_sheets()
 
-            # Step 10: Logout
+            # Step 11: Logout
             self._update_progress(98, "Logging out...")
             self.client.logout()
 
@@ -482,7 +502,9 @@ class InventoryCollector:
             "vDatastore": self._build_vdatastore(),
             "vSwitch": self._build_vswitch(),
             # 陈俊杰
-            "vSnapshot": self._build_vsnapshot()
+            "vSnapshot": self._build_vsnapshot(),
+            # add 2026-4-25
+            "vHBA": self._build_vHBA()
         }
 
     # ── Sheet builders ───────────────────────────────────
@@ -515,6 +537,8 @@ class InventoryCollector:
             {"Item": "Total Port Groups", "Count": len(self.portgroups)},
             # 陈俊杰
             {"Item": "Total VM Snapshots", "Count": len(self.vm_snaps)},
+            # 2026-4-25
+            {"Item": "Total storageAdapters", "Count": len(self.hbas)},
             {"Item": "", "Count": ""},
             {"Item": "=== Power State by Cluster ===", "Count": ""},
         ]
@@ -555,12 +579,14 @@ class InventoryCollector:
             row["Memory (MB)"] = _try_paths(merged, ["vmConfig.memory.quantityMB", "memory.quantityMB"])
             row["Total Disk (GB)"] = total_disk
             row["IP Addresses"] = ip_list
-            row["Host"] = self.host_map.get(_try_paths(merged, ["locationUrn", "hostUrn"]), "") or _try_paths(merged, ["hostName", "locationName"])
-            row["Cluster"] = self.cluster_map.get(_try_paths(merged, ["clusterUrn"]), "") or _try_paths(merged, ["clusterName"])
+            row["Host"] = self.host_map.get(_try_paths(merged, ["locationUrn", "hostUrn"]), "") or _try_paths(merged, [
+                "hostName", "locationName"])
+            row["Cluster"] = self.cluster_map.get(_try_paths(merged, ["clusterUrn"]), "") or _try_paths(merged,
+                                                                                                        ["clusterName"])
             row["VM Tools Version"] = _try_paths(merged, ["toolsVersion"])
             row["VM Tools Status"] = _try_paths(merged, ["pvDriverStatus", "toolInstallStatus"])
             # 虚拟机文件夹
-            row["Folder Name"] = merged.get("folderName", "")
+            row["Folder"] = merged.get("folderName", "")
             row["NICs"] = len(nics)
             # 磁盘数量
             row["Disks"] = len(disks)
@@ -637,8 +663,8 @@ class InventoryCollector:
                 row["Storage Type"] = _try_paths(disk, ["storageType"])
                 row["Independent"] = _try_paths(disk, ["indepDisk"])
                 row["Persistent"] = _try_paths(disk, ["persistentDisk"])
-                row["Volume Format"] = _try_paths(disk, ["volumeFormat"])
-                row["Volume Use Type"] = _try_paths(disk, ["volumeUseType"])
+                row["volume Format"] = _try_paths(disk, ["volumeFormat"])
+                row["volume Use Type"] = _try_paths(disk, ["volumeUseType"])
                 row["Volume URN"] = _try_paths(disk, ["volumeUrn"])
                 rows.append(row)
         return rows
@@ -726,7 +752,7 @@ class InventoryCollector:
             row["CPU Total Cores"] = _try_paths(merged, ["cpuTotalCores"])
             row["CPU Used Cores"] = _try_paths(merged, ["cpuUsedCores"])
             row["CPU Over Commitment Ratio"] = _try_paths(merged, ["cpuOverCommitmentRatio"])
-            row["Memory Total Size(MB)"] = _try_paths(merged, ["memTotalSizeMB"])
+            row["Memory Total Size (MB)"] = _try_paths(merged, ["memTotalSizeMB"])
             row["Memory usage"] = _try_paths(merged, ["memUsage", "mem_usage"])
             row["All VMs"] = _try_paths(merged, ["vmCount"])
             row["URN"] = urn
@@ -768,10 +794,10 @@ class InventoryCollector:
         for ds in self.datastores:
             row = OrderedDict()
             row["Datastore Name"] = _try_paths(ds, ["name"])
-            row["su Name"] = _try_paths(ds, ["suName"])
+            row["SU Name"] = _try_paths(ds, ["suName"])
             row["WWN"] = ""
             if "scsi-3" in ds.get("suName"):
-                row["WWN"] = ds.get("suName").split("scsi-3")[-1]
+                row["wwn"] = ds.get("suName").split("scsi-3")[-1]
 
             row["Storage Type"] = _try_paths(ds, ["storageType"])
 
@@ -836,6 +862,19 @@ class InventoryCollector:
             row["Description"] = _try_paths(pg, ["description"])
             row["Parent"] = pg.get("_dvswitch_name", "")
             row["URN"] = _try_paths(pg, ["urn"])
+            rows.append(row)
+        return rows
+
+    def _build_vHBA(self):
+        rows = []
+        for hba in self.hbas:
+            row = OrderedDict()
+            row["Host"] = _try_paths(hba, ["host"])
+            row["Site"] = _try_paths(hba, ["site"])
+            row["Device"] = _try_paths(hba, ["name"])
+            row["Type"] = _try_paths(hba, ["type"])
+            row["WWN"] = _try_paths(hba, ["wwn"])
+            row["Status"] = _try_paths(hba, ["status"])
             rows.append(row)
         return rows
 

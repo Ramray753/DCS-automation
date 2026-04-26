@@ -15,7 +15,7 @@ if exist FCInventoryTool.spec del /f /q FCInventoryTool.spec
 
 echo.
 echo Building FCInventoryTool.exe ...
-pyinstaller --noconfirm --onedir --name FCInventoryTool ^
+pyinstaller --noconfirm --onefile --name FCInventoryTool ^
     --add-data "templates;templates" ^
     --add-data "static;static" ^
     --add-data "CHANGELOG.md;." ^
